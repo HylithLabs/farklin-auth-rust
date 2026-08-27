@@ -1,4 +1,4 @@
-# farklin-auth
+# farklin-auth-rust
 
 Identity, sessions and access control for Farklin. Authentication, sliding sessions, device fingerprinting and risk-based session security.
 
