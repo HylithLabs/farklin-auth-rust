@@ -3,103 +3,44 @@
 pub type Result<T> = core::result::Result<T, Error>;
 pub type Error = Box<dyn std::error::Error>; // For examples.
 
-use serde_json::{json, Value};
+use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<()> {
 	let hc = httpc_test::new_client("http://localhost:8080")?;
 
-	// hc.do_get("/index.html").await?.print().await?;
-
-	// -- Login
-	let req_login = hc.do_post(
-		"/api/login",
+	// -- Signup (use a fresh email each run — SuperTokens rejects a repeat)
+	let email = format!("quickdev-{}@example.com", uuid_suffix());
+	let req_signup = hc.do_post(
+		"/api/signup",
 		json!({
-			"username": "demo1",
-			"pwd": "welcome"
+			"email": email,
+			"password": "quick-dev-pwd-01"
 		}),
 	);
-	req_login.await?.print().await?;
+	req_signup.await?.print().await?;
 
-	// -- Create Agent
-	let req_create_agent = hc.do_post(
-		"/api/rpc",
-		json!({
-			"jsonrpc": "2.0",
-			"id": 1,
-			"method": "create_agent",
-			"params": {
-				"data": {
-					"name": "agent AAA"
-				}
-			}
-		}),
-	);
-	let result = req_create_agent.await?;
-	result.print().await?;
-	let agent_id = result.json_value::<i64>("/result/data/id")?;
+	// -- Session check (cookies from signup carry over on this client)
+	hc.do_get("/api/session").await?.print().await?;
 
-	// -- Get Agent
-	let req_get_agent = hc.do_post(
-		"/api/rpc",
-		json!({
-			"jsonrpc": "2.0",
-			"id": 1,
-			"method": "get_agent",
-			"params": {
-					"id": agent_id
-			}
-		}),
-	);
-	let result = req_get_agent.await?;
-	result.print().await?;
-
-	// -- Create Conv
-	let req_create_conv = hc.do_post(
-		"/api/rpc",
-		json!({
-			"jsonrpc": "2.0",
-			"id": 1,
-			"method": "create_conv",
-			"params": {
-				"data": {
-					"agent_id": agent_id,
-					"title": "conv 01"
-				}
-			}
-		}),
-	);
-	let result = req_create_conv.await?;
-	result.print().await?;
-	let conv_id = result.json_value::<i64>("/result/data/id")?;
-
-	// -- Create ConvMsg
-	let req_create_conv = hc.do_post(
-		"/api/rpc",
-		json!({
-			"jsonrpc": "2.0",
-			"id": 1,
-			"method": "add_conv_msg",
-			"params": {
-				"data": {
-					"conv_id": conv_id,
-					"content": "This is the first comment"
-				}
-			}
-		}),
-	);
-	let result = req_create_conv.await?;
-	result.print().await?;
-	let conv_msg_id = result.json_value::<i64>("/result/data/id")?;
+	// -- Refresh
+	hc.do_post("/api/refresh", json!({})).await?.print().await?;
 
 	// -- Logoff
-	let req_logoff = hc.do_post(
-		"/api/logoff",
-		json!({
-			"logoff": true
-		}),
-	);
+	let req_logoff = hc.do_post("/api/logoff", json!({ "logoff": true }));
 	req_logoff.await?.print().await?;
 
+	// -- Session check should now 401
+	hc.do_get("/api/session").await?.print().await?;
+
 	Ok(())
+}
+
+fn uuid_suffix() -> String {
+	use std::time::{SystemTime, UNIX_EPOCH};
+	let nanos = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.map(|d| d.as_nanos())
+		.unwrap_or_default();
+	format!("{nanos:x}")
 }
