@@ -1,0 +1,11 @@
+mod action_logs;
+mod auth;
+mod board;
+mod groups;
+mod moderation;
+mod notification;
+pub mod openapi;
+pub mod routes;
+mod search;
+mod stream;
+mod user;
