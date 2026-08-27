@@ -14,16 +14,15 @@ RUST_LOG="web_server=debug,lib_core=debug,lib_web=debug,lib_auth=debug,lib_utils
 #   (e.g., Kubernetes).
 
 ## -- Secrets
-# Keys and passwords below are for localhost dev ONLY.
-# e.g., "welcome" type of passwords.
+# Password below is for localhost dev ONLY, matches
+# docker-compose.dev.yml's postgres service (POSTGRES_USER/DB=farklin).
 # i.e., Encryption not needed.
 
-SERVICE_DB_URL="postgres://app_user:dev_only_pwd@localhost/app_db"
+SERVICE_DB_URL="postgres://farklin:farklin@localhost:5432/farklin_auth"
 
-SERVICE_PWD_KEY="CKUGFOD9_2Qf6Pn3ZFRYgPYb8ht4vKqEG9PGMXTB7497bT0367DjoaD6ydFnEVaIRda0kKeBZVCT5Hb62m2sCA"
-
-SERVICE_TOKEN_KEY="9FoHBmkyxbgu_xFoQK7e0jz3RMNVJWgfvbVn712FBNH9LLaAWS3CS6Zpcg6RveiObvCUb6a2z-uAiLjhLh2igw"
-SERVICE_TOKEN_DURATION_SEC="1800" # 30 minutes
+# SuperTokens core (docker-compose.dev.yml's supertokens-core service).
+# No API key: the dev core isn't started with API_KEYS set.
+SUPERTOKENS_CORE_URL="http://localhost:3567"
 
 ## -- ConfigMap
 

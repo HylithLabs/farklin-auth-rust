@@ -7,12 +7,14 @@ use tracing::info;
 
 type Db = Pool<Postgres>;
 
-// NOTE: Hardcode to prevent deployed system db update.
-const PG_DEV_POSTGRES_URL: &str = "postgres://postgres:welcome@localhost/postgres";
-const PG_DEV_APP_URL: &str = "postgres://app_user:dev_only_pwd@localhost/app_db";
+// NOTE: Hardcode to prevent deployed system db update. Matches the
+//       farklin/farklin_auth db+user docker-compose.dev.yml provisions at
+//       container init — there is no separate root superuser to recreate
+//       it from, so schema reset (00-recreate-db.sql) runs against this
+//       same connection instead of dropping/recreating the database.
+const PG_DEV_APP_URL: &str = "postgres://farklin:farklin@localhost:5432/farklin_auth";
 
 // sql files
-const SQL_RECREATE_DB_FILE_NAME: &str = "00-recreate-db.sql";
 const SQL_DIR: &str = "sql/dev_initial";
 
 pub async fn init_dev_db() -> Result<(), Box<dyn std::error::Error>> {
@@ -31,28 +33,21 @@ pub async fn init_dev_db() -> Result<(), Box<dyn std::error::Error>> {
 	};
 	let sql_dir = base_dir.join(SQL_DIR);
 
-	// -- Create the app_db/app_user with the postgres user.
-	{
-		let sql_recreate_db_file = sql_dir.join(SQL_RECREATE_DB_FILE_NAME);
-		let root_db = new_db_pool(PG_DEV_POSTGRES_URL).await?;
-		pexec(&root_db, &sql_recreate_db_file).await?;
-	}
-
 	// -- Get sql files.
 	let mut paths: Vec<PathBuf> = fs::read_dir(sql_dir)?
 		.filter_map(|entry| entry.ok().map(|e| e.path()))
 		.collect();
 	paths.sort();
 
-	// -- SQL Execute each file.
+	// -- SQL Execute each file (00-recreate-db.sql resets schema objects
+	//    in-place; the db/role themselves are already owned by
+	//    docker-compose.dev.yml's postgres service).
 	let app_db = new_db_pool(PG_DEV_APP_URL).await?;
 
 	for path in paths {
 		let path_str = path.to_string_lossy();
 
-		if path_str.ends_with(".sql")
-			&& !path_str.ends_with(SQL_RECREATE_DB_FILE_NAME)
-		{
+		if path_str.ends_with(".sql") {
 			pexec(&app_db, &path).await?;
 		}
 	}
