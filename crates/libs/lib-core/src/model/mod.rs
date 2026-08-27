@@ -19,15 +19,10 @@
 
 // region:    --- Modules
 
-mod acs;
 mod base;
 mod error;
 mod store;
 
-pub mod agent;
-pub mod conv;
-pub mod conv_msg;
-pub mod conv_user;
 pub mod modql_utils;
 pub mod user;
 
@@ -40,7 +35,6 @@ use crate::model::store::new_db_pool;
 
 // region:    --- ModelManager
 
-#[cfg_attr(feature = "with-rpc", derive(rpc_router::RpcResource))]
 #[derive(Clone)]
 pub struct ModelManager {
 	dbx: Dbx,

@@ -14,16 +14,12 @@ workspace = true
 lib-utils = { path = "../../libs/lib-utils"}
 # -- Async
 tokio = { version = "1", features = ["full"] }
+# -- Http (SuperTokens core REST client)
+reqwest = { workspace = true }
 # -- Json
 serde = { version = "1", features = ["derive"] }
-# -- Hashing (pwd-scheme01 & Token)
-hmac = "0.12"
-sha2 = "0.10"
-blake3 = "1.5.5"
-# -- Hashing (pwd-scheme02)
-argon2 = {version="0.5", features=["std"]}
+serde_json = "1"
+# -- Tracing
+tracing = "0.1"
 # -- Others
-uuid = {version = "1", features = ["v4","fast-rng",]}
-lazy-regex = "3"
 derive_more = { workspace = true }
-enum_dispatch = "0.3"

@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 # -- App Libs
 lib-utils = { path = "../../libs/lib-utils"}
-lib-rpc-core = { path = "../../libs/lib-rpc-core"}
 lib-auth = { path = "../../libs/lib-auth"}
 lib-core = { path = "../../libs/lib-core"}
 
@@ -16,6 +15,8 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_with = { workspace = true }
+# -- Validation
+validator = { version = "0.19", features = ["derive"] }
 # -- Web
 axum = { workspace = true }
 tower-http = { workspace = true }
@@ -23,8 +24,6 @@ tower-cookies = { workspace = true }
 # -- Tracing
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-# -- Rpc
-rpc-router = { workspace = true }
 # -- Others
 time = { workspace = true }
 uuid = {version = "1", features = ["v4","fast-rng",]}

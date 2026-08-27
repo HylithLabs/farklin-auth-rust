@@ -3,8 +3,6 @@
 mod dev_db;
 
 use crate::ctx::Ctx;
-use crate::model::agent::{AgentBmc, AgentFilter, AgentForCreate};
-use crate::model::conv::{ConvBmc, ConvForCreate};
 use crate::model::{self, ModelManager};
 use modql::filter::OpValString;
 use tokio::sync::OnceCell;
@@ -41,54 +39,40 @@ pub async fn init_test() -> ModelManager {
 }
 
 // region:    --- User seed/clean
-
-pub async fn seed_users(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	usernames: &[&str],
-) -> model::Result<Vec<i64>> {
-	let mut ids = Vec::new();
-
-	for name in usernames {
-		let id = seed_user(ctx, mm, name).await?;
-		ids.push(id);
-	}
-
-	Ok(ids)
-}
+//
+// NOTE: These seed the local `user` mirror table only. They take an
+// already-created SuperTokens `(st_user_id, email)` pair rather than
+// calling the core themselves — lib-core intentionally doesn't depend on
+// lib-auth/SuperTokens. Tests that need a real signed-up user should call
+// `lib_auth::supertokens::sign_up` first and pass the result in here.
 
 pub async fn seed_user(
 	ctx: &Ctx,
 	mm: &ModelManager,
-	username: &str,
+	st_user_id: &str,
+	email: &str,
 ) -> model::Result<i64> {
-	let pwd_clear = "seed-user-pwd";
-
-	let id = model::user::UserBmc::create(
+	model::user::UserBmc::create(
 		ctx,
 		mm,
 		model::user::UserForCreate {
-			username: username.to_string(),
-			pwd_clear: pwd_clear.to_string(),
+			st_user_id: st_user_id.to_string(),
+			email: email.to_string(),
 		},
 	)
-	.await?;
-
-	Ok(id)
+	.await
 }
 
 pub async fn clean_users(
 	ctx: &Ctx,
 	mm: &ModelManager,
-	contains_username: &str,
+	contains_email: &str,
 ) -> model::Result<usize> {
 	let users = model::user::UserBmc::list(
 		ctx,
 		mm,
 		Some(vec![model::user::UserFilter {
-			username: Some(
-				OpValString::Contains(contains_username.to_string()).into(),
-			),
+			email: Some(OpValString::Contains(contains_email.to_string()).into()),
 			..Default::default()
 		}]),
 		None,
@@ -104,125 +88,3 @@ pub async fn clean_users(
 }
 
 // endregion: --- User seed/clean
-
-// region:    --- Conv seed/clean
-
-pub async fn seed_convs(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	agent_id: i64,
-	titles: &[&str],
-) -> model::Result<Vec<i64>> {
-	let mut ids = Vec::new();
-
-	for title in titles {
-		let id = seed_conv(ctx, mm, agent_id, title).await?;
-		ids.push(id);
-	}
-
-	Ok(ids)
-}
-
-pub async fn seed_conv(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	agent_id: i64,
-	title: &str,
-) -> model::Result<i64> {
-	ConvBmc::create(
-		ctx,
-		mm,
-		ConvForCreate {
-			agent_id,
-			title: Some(title.to_string()),
-			..Default::default()
-		},
-	)
-	.await
-}
-
-pub async fn clean_convs(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	contains_title: &str,
-) -> model::Result<usize> {
-	let convs = ConvBmc::list(
-		ctx,
-		mm,
-		Some(vec![model::conv::ConvFilter {
-			title: Some(OpValString::Contains(contains_title.to_string()).into()),
-			..Default::default()
-		}]),
-		None,
-	)
-	.await?;
-
-	let count = convs.len();
-
-	for conv in convs {
-		ConvBmc::delete(ctx, mm, conv.id).await?;
-	}
-
-	Ok(count)
-}
-
-// endregion: --- Conv seed/clean
-
-// region:    --- Agent seed/clean
-
-pub async fn seed_agents(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	names: &[&str],
-) -> model::Result<Vec<i64>> {
-	let mut ids = Vec::new();
-
-	for name in names {
-		let id = seed_agent(ctx, mm, name).await?;
-		ids.push(id);
-	}
-
-	Ok(ids)
-}
-
-pub async fn seed_agent(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	name: &str,
-) -> model::Result<i64> {
-	AgentBmc::create(
-		ctx,
-		mm,
-		AgentForCreate {
-			name: name.to_string(),
-		},
-	)
-	.await
-}
-
-/// Delete all agents that have their title contains contains_name
-pub async fn clean_agents(
-	ctx: &Ctx,
-	mm: &ModelManager,
-	contains_name: &str,
-) -> model::Result<usize> {
-	let agents = AgentBmc::list(
-		ctx,
-		mm,
-		Some(vec![AgentFilter {
-			name: Some(OpValString::Contains(contains_name.to_string()).into()),
-			..Default::default()
-		}]),
-		None,
-	)
-	.await?;
-	let count = agents.len();
-
-	for agent in agents {
-		AgentBmc::delete(ctx, mm, agent.id).await?;
-	}
-
-	Ok(count)
-}
-
-// endregion: --- Agent seed/clean

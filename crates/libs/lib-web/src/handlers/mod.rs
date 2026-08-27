@@ -1,2 +1,1 @@
-pub mod handlers_login;
-pub mod handlers_rpc;
+pub mod handlers_auth;

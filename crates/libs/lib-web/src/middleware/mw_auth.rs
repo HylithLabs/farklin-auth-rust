@@ -1,17 +1,17 @@
 use crate::error::{Error, Result};
-use crate::utils::token::{set_token_cookie, AUTH_TOKEN};
+use crate::utils::session_cookies::{self, clear_session_cookies};
 use axum::body::Body;
 use axum::extract::{FromRequestParts, State};
 use axum::http::request::Parts;
 use axum::http::Request;
 use axum::middleware::Next;
 use axum::response::Response;
-use lib_auth::token::{validate_web_token, Token};
+use lib_auth::supertokens::{self, VerifyOutcome};
 use lib_core::ctx::Ctx;
 use lib_core::model::user::{UserBmc, UserForAuth};
 use lib_core::model::ModelManager;
 use serde::Serialize;
-use tower_cookies::{Cookie, Cookies};
+use tower_cookies::Cookies;
 use tracing::debug;
 
 pub async fn mw_ctx_require(
@@ -41,10 +41,14 @@ pub async fn mw_ctx_resolver(
 
 	let ctx_ext_result = ctx_resolve(mm, &cookies).await;
 
-	if ctx_ext_result.is_err()
-		&& !matches!(ctx_ext_result, Err(CtxExtError::TokenNotInCookie))
-	{
-		cookies.remove(Cookie::from(AUTH_TOKEN))
+	// A dead/invalid access token cookie is worthless — drop it. We keep
+	// TryRefreshToken cookies intact: the client is expected to call
+	// /api/refresh (using the still-valid refresh token cookie) next.
+	if matches!(
+		ctx_ext_result,
+		Err(CtxExtError::SessionUnauthorised) | Err(CtxExtError::UserNotFound)
+	) {
+		clear_session_cookies(&cookies);
 	}
 
 	// Store the ctx_ext_result in the request extension
@@ -55,29 +59,27 @@ pub async fn mw_ctx_resolver(
 }
 
 async fn ctx_resolve(mm: ModelManager, cookies: &Cookies) -> CtxExtResult {
-	// -- Get Token String
-	let token = cookies
-		.get(AUTH_TOKEN)
-		.map(|c| c.value().to_string())
+	// -- Get Access Token
+	let access_token = session_cookies::access_token(cookies)
 		.ok_or(CtxExtError::TokenNotInCookie)?;
 
-	// -- Parse Token
-	let token: Token = token.parse().map_err(|_| CtxExtError::TokenWrongFormat)?;
+	// -- Verify against SuperTokens core
+	let verify_outcome = supertokens::verify_session(&access_token)
+		.await
+		.map_err(|ex| CtxExtError::CoreCallFailed(ex.to_string()))?;
 
-	// -- Get UserForAuth
+	let st_user_id = match verify_outcome {
+		VerifyOutcome::Valid { user_id, .. } => user_id,
+		VerifyOutcome::TryRefresh => return Err(CtxExtError::TryRefreshToken),
+		VerifyOutcome::Unauthorised => return Err(CtxExtError::SessionUnauthorised),
+	};
+
+	// -- Map to our local user mirror
 	let user: UserForAuth =
-		UserBmc::first_by_username(&Ctx::root_ctx(), &mm, &token.ident)
+		UserBmc::first_by_st_user_id(&Ctx::root_ctx(), &mm, &st_user_id)
 			.await
 			.map_err(|ex| CtxExtError::ModelAccessError(ex.to_string()))?
 			.ok_or(CtxExtError::UserNotFound)?;
-
-	// -- Validate Token
-	validate_web_token(&token, user.token_salt)
-		.map_err(|_| CtxExtError::FailValidate)?;
-
-	// -- Update Token
-	set_token_cookie(cookies, &user.username, user.token_salt)
-		.map_err(|_| CtxExtError::CannotSetTokenCookie)?;
 
 	// -- Create CtxExtResult
 	Ctx::new(user.id)
@@ -111,12 +113,15 @@ type CtxExtResult = core::result::Result<CtxW, CtxExtError>;
 #[derive(Clone, Serialize, Debug)]
 pub enum CtxExtError {
 	TokenNotInCookie,
-	TokenWrongFormat,
+
+	/// Access token expired — caller should hit `/api/refresh`.
+	TryRefreshToken,
+	/// Session was revoked/doesn't exist in the core.
+	SessionUnauthorised,
 
 	UserNotFound,
 	ModelAccessError(String),
-	FailValidate,
-	CannotSetTokenCookie,
+	CoreCallFailed(String),
 
 	CtxNotInRequestExt,
 	CtxCreateFail(String),

@@ -1,6 +1,5 @@
 // region:    --- Modules
-pub mod routes_login;
-pub mod routes_rpc;
-pub mod rpcs;
+pub mod routes_auth;
+pub mod routes_session;
 
 // endregion: --- Modules

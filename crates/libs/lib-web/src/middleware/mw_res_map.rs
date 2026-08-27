@@ -1,5 +1,4 @@
 use crate::error::{Error, Result};
-use crate::handlers::handlers_rpc::RpcInfo;
 use crate::log::log_request;
 use crate::middleware::mw_auth::CtxW;
 use crate::middleware::mw_req_stamp::ReqStamp;
@@ -24,8 +23,6 @@ pub async fn mw_reponse_map(
 	debug!("{:<12} - mw_reponse_map", "RES_MAPPER");
 	let uuid = Uuid::new_v4();
 
-	let rpc_info = res.extensions().get::<Arc<RpcInfo>>().map(Arc::as_ref);
-
 	// -- Get the eventual response error.
 	let web_error = res.extensions().get::<Arc<Error>>().map(Arc::as_ref);
 	let client_status_error = web_error.map(|se| se.client_status_and_error());
@@ -40,7 +37,6 @@ pub async fn mw_reponse_map(
 				let detail = client_error.as_ref().and_then(|v| v.get("detail"));
 
 				let client_error_body = json!({
-					"id": rpc_info.as_ref().map(|rpc| rpc.id.clone()),
 					"error": {
 						"message": message, // Variant name
 						"data": {
@@ -60,16 +56,7 @@ pub async fn mw_reponse_map(
 	let client_error = client_status_error.unzip().1;
 
 	// TODO: Need to hander if log_request fail (but should not fail request)
-	let _ = log_request(
-		req_method,
-		uri,
-		req_stamp,
-		rpc_info,
-		ctx,
-		web_error,
-		client_error,
-	)
-	.await;
+	let _ = log_request(req_method, uri, req_stamp, ctx, web_error, client_error).await;
 
 	debug!("\n");
 

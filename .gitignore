@@ -1,6 +1,7 @@
 # -- Base
 .*
 !.gitignore
+!.env.example
 
 _*
 # '_' in src dir, ok.

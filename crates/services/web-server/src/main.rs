@@ -12,7 +12,7 @@ use lib_web::middleware::mw_req_stamp::mw_req_stamp_resolver;
 use lib_web::middleware::mw_res_map::mw_reponse_map;
 use lib_web::routes::routes_static;
 
-use crate::web::routes_login;
+use crate::web::{routes_auth, routes_session};
 
 use axum::{middleware, Router};
 use lib_core::_dev_utils;
@@ -38,12 +38,14 @@ async fn main() -> Result<()> {
 	let mm = ModelManager::new().await?;
 
 	// -- Define Routes
-	let routes_rpc = web::routes_rpc::routes(mm.clone())
+	// `/api/session` is the only route that requires a valid session —
+	// signup/signin/refresh/logoff must stay reachable while logged out.
+	let routes_protected = routes_session::routes(mm.clone())
 		.route_layer(middleware::from_fn(mw_ctx_require));
 
 	let routes_all = Router::new()
-		.merge(routes_login::routes(mm.clone()))
-		.nest("/api", routes_rpc)
+		.merge(routes_auth::routes(mm.clone()))
+		.merge(routes_protected)
 		.layer(middleware::map_response(mw_reponse_map))
 		.layer(middleware::from_fn_with_state(mm.clone(), mw_ctx_resolver))
 		.layer(CookieManagerLayer::new())

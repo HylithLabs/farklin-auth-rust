@@ -1,6 +1,5 @@
 use crate::model::store::dbx;
 use derive_more::From;
-use lib_auth::pwd;
 use serde::Serialize;
 use serde_with::{serde_as, DisplayFromStr};
 use sqlx::error::DatabaseError;
@@ -24,7 +23,7 @@ pub enum Error {
 
 	// -- DB
 	UserAlreadyExists {
-		username: String,
+		email: String,
 	},
 	UniqueViolation {
 		table: String,
@@ -35,8 +34,6 @@ pub enum Error {
 	CantCreateModelManagerProvider(String),
 
 	// -- Modules
-	#[from]
-	Pwd(pwd::Error),
 	#[from]
 	Dbx(dbx::Error),
 

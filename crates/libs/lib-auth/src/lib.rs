@@ -1,5 +1,4 @@
 mod config;
-pub mod pwd;
-pub mod token;
+pub mod supertokens;
 
-use config::auth_config;
+pub use config::auth_config;
