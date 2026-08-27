@@ -55,7 +55,7 @@ aws-config = { version = "1.9.0", features = ["behavior-version-latest"] }
 meilisearch-sdk = { version = "0.33.0" }
 utoipa = { version = "5.5.0", features = ["axum_extras", "openapi_extensions", "time", "uuid", "chrono"] }
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum", "debug-embed"] }
-validator = { version = "0.20.0", features = ["derive"] }
+validator = { version = "0.21.0", features = ["derive"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
 tracing-appender = "0.2.5"
