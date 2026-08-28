@@ -19,6 +19,9 @@ reqwest = { workspace = true }
 # -- Json
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# -- Risk engine (login-risk.json is a JDM decision table, not Rust logic —
+# see https://gorules.io, editable in their visual editor without a redeploy)
+zen-engine = "2"
 # -- Tracing
 tracing = "0.1"
 # -- Others

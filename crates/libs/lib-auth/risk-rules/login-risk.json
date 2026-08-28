@@ -1,0 +1,97 @@
+{
+  "nodes": [
+    {
+      "id": "input-1",
+      "type": "inputNode",
+      "position": { "x": 150, "y": 210 },
+      "name": "Login Attempt"
+    },
+    {
+      "id": "table-1",
+      "type": "decisionTableNode",
+      "position": { "x": 410, "y": 210 },
+      "name": "Login Risk",
+      "content": {
+        "hitPolicy": "first",
+        "inputs": [
+          {
+            "field": "deviceChanged",
+            "id": "deviceChanged",
+            "name": "Device fingerprint changed",
+            "type": "expression"
+          },
+          {
+            "field": "ipChanged",
+            "id": "ipChanged",
+            "name": "IP changed",
+            "type": "expression"
+          }
+        ],
+        "outputs": [
+          {
+            "field": "outcome",
+            "id": "outcome",
+            "name": "Outcome",
+            "type": "expression"
+          },
+          {
+            "field": "reason",
+            "id": "reason",
+            "name": "Reason",
+            "type": "expression"
+          }
+        ],
+        "rules": [
+          {
+            "_id": "rule-device-and-ip-changed",
+            "deviceChanged": "== true",
+            "ipChanged": "== true",
+            "outcome": "'block'",
+            "reason": "'device_and_ip_changed'"
+          },
+          {
+            "_id": "rule-device-changed",
+            "deviceChanged": "== true",
+            "ipChanged": "",
+            "outcome": "'flag'",
+            "reason": "'device_changed'"
+          },
+          {
+            "_id": "rule-ip-changed-only",
+            "deviceChanged": "",
+            "ipChanged": "== true",
+            "outcome": "'flag'",
+            "reason": "'ip_changed_only'"
+          },
+          {
+            "_id": "rule-default",
+            "deviceChanged": "",
+            "ipChanged": "",
+            "outcome": "'allow'",
+            "reason": "'no_change'"
+          }
+        ]
+      }
+    },
+    {
+      "id": "output-1",
+      "type": "outputNode",
+      "position": { "x": 660, "y": 210 },
+      "name": "Verdict"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "sourceId": "input-1",
+      "type": "edge",
+      "targetId": "table-1"
+    },
+    {
+      "id": "edge-2",
+      "sourceId": "table-1",
+      "type": "edge",
+      "targetId": "output-1"
+    }
+  ]
+}
