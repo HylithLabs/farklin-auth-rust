@@ -14,6 +14,13 @@ CREATE TABLE "user" (
   email varchar(256) NOT NULL UNIQUE,
   typ user_typ NOT NULL DEFAULT 'User',
 
+  -- Login risk baseline (see lib_auth::risk) — what this user's last
+  -- *successful* login looked like, compared against on the next signin.
+  -- Both changing together is what login-risk.json blocks on. Null on a
+  -- brand new user: nothing to compare the first login against yet.
+  last_ip varchar(45), -- long enough for IPv6
+  last_visitor_id varchar(64), -- FingerprintJS visitorId
+
   -- Timestamps
   cid bigint NOT NULL,
   ctime timestamp with time zone NOT NULL,

@@ -18,7 +18,7 @@ RUST_LOG="web_server=debug,lib_core=debug,lib_web=debug,lib_auth=debug,lib_utils
 # docker-compose.dev.yml's postgres service (POSTGRES_USER/DB=farklin).
 # i.e., Encryption not needed.
 
-SERVICE_DB_URL="postgres://farklin:farklin@localhost:5432/farklin_auth"
+SERVICE_DB_URL="postgres://farklin:farklin@localhost:5434/farklin_auth"
 
 # SuperTokens core (docker-compose.dev.yml's supertokens-core service).
 # No API key: the dev core isn't started with API_KEYS set.

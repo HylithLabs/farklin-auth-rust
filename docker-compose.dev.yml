@@ -17,7 +17,13 @@ services:
       POSTGRES_PASSWORD: farklin
       POSTGRES_DB: farklin_auth
     ports:
-      - "5432:5432"
+      # Host port 5434, not 5432 — some dev machines already run native
+      # Postgres services (e.g. two side-by-side installs default to 5432
+      # AND 5433), which silently win those ports and make this container
+      # unreachable from the host (container-internal traffic still uses
+      # 5432 — supertokens-core below talks to this over the compose
+      # network as `postgres:5432`, unaffected by this host-side remap).
+      - "5434:5432"
     volumes:
       - postgres-data:/var/lib/postgresql
     restart: unless-stopped
@@ -27,26 +33,21 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:8-alpine
-    container_name: farklin-auth-redis
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
   supertokens-core:
     image: supertokens/supertokens-postgresql:12.1.1
     container_name: farklin-auth-supertokens-core
     environment:
       POSTGRESQL_CONNECTION_URI: "postgresql://farklin:farklin@postgres:5432/farklin_auth?schema=supertokens"
+      # access: 1hr (SuperTokens default). refresh: 30 days — the actual
+      # session lifetime users see. Refreshing does NOT push this deadline
+      # forward on its own (confirmed empirically — a refresh right after
+      # signup barely moved the expiry timestamp at all); the sliding
+      # "never expires while active" behavior is handled in
+      # api_refresh_handler (see SLIDING_WINDOW_THRESHOLD_MS in
+      # crates/libs/lib-web/src/handlers/handlers_auth.rs), which swaps in
+      # a fresh session once this window is more than half spent.
+      ACCESS_TOKEN_VALIDITY: "3600"
+      REFRESH_TOKEN_VALIDITY: "43200" # 30 days, in minutes
     ports:
       - "3567:3567"
     depends_on:
@@ -61,4 +62,3 @@ services:
 
 volumes:
   postgres-data:
-  redis-data:

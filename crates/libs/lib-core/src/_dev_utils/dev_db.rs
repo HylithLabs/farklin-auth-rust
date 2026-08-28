@@ -12,7 +12,7 @@ type Db = Pool<Postgres>;
 //       container init — there is no separate root superuser to recreate
 //       it from, so schema reset (00-recreate-db.sql) runs against this
 //       same connection instead of dropping/recreating the database.
-const PG_DEV_APP_URL: &str = "postgres://farklin:farklin@localhost:5432/farklin_auth";
+const PG_DEV_APP_URL: &str = "postgres://farklin:farklin@localhost:5434/farklin_auth";
 
 // sql files
 const SQL_DIR: &str = "sql/dev_initial";

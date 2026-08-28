@@ -58,6 +58,8 @@ pub async fn seed_user(
 		model::user::UserForCreate {
 			st_user_id: st_user_id.to_string(),
 			email: email.to_string(),
+			last_ip: None,
+			last_visitor_id: None,
 		},
 	)
 	.await

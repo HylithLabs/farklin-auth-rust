@@ -46,21 +46,40 @@ pub struct User {
 pub struct UserForCreate {
 	pub st_user_id: String,
 	pub email: String,
+	/// Recorded as the login-risk baseline immediately — nothing to
+	/// compare a first-ever login against, but the *next* one needs a
+	/// starting point.
+	pub last_ip: Option<String>,
+	pub last_visitor_id: Option<String>,
 }
 
 #[derive(Fields)]
 pub struct UserForInsert {
 	pub st_user_id: String,
 	pub email: String,
+	pub last_ip: Option<String>,
+	pub last_visitor_id: Option<String>,
 }
 
 /// What the session-verify middleware needs to build a `Ctx` from a
-/// SuperTokens `userId`.
+/// SuperTokens `userId`, plus the login-risk baseline (see
+/// `lib_auth::risk`) the signin handler compares the current attempt
+/// against.
 #[derive(Clone, FromRow, Fields, Debug)]
 pub struct UserForAuth {
 	pub id: i64,
 	pub st_user_id: String,
 	pub email: String,
+	pub last_ip: Option<String>,
+	pub last_visitor_id: Option<String>,
+}
+
+/// Partial update — only `Some` fields are written. Used after a signin
+/// that wasn't blocked, to move the risk baseline forward.
+#[derive(Fields, Default)]
+pub struct UserForFingerprintUpdate {
+	pub last_ip: Option<String>,
+	pub last_visitor_id: Option<String>,
 }
 
 /// Marker trait
@@ -111,9 +130,14 @@ impl UserBmc {
 		mm: &ModelManager,
 		user_c: UserForCreate,
 	) -> Result<i64> {
-		let UserForCreate { st_user_id, email } = user_c;
+		let UserForCreate { st_user_id, email, last_ip, last_visitor_id } = user_c;
 
-		let user_fi = UserForInsert { st_user_id, email: email.clone() };
+		let user_fi = UserForInsert {
+			st_user_id,
+			email: email.clone(),
+			last_ip,
+			last_visitor_id,
+		};
 
 		let user_id = base::create::<Self, _>(ctx, mm, user_fi).await.map_err(
 			|model_error| {
@@ -174,6 +198,27 @@ impl UserBmc {
 		list_options: Option<ListOptions>,
 	) -> Result<Vec<User>> {
 		base::list::<Self, _, _>(ctx, mm, filter, list_options).await
+	}
+
+	/// Moves the login-risk baseline forward after a signin that wasn't
+	/// blocked. Deliberately separate from a generic `update` — callers
+	/// must never call this after a `Block` verdict (that would let a
+	/// caller with a stolen session cookie overwrite the known-good
+	/// baseline with its own fingerprint).
+	pub async fn update_login_fingerprint(
+		ctx: &Ctx,
+		mm: &ModelManager,
+		id: i64,
+		last_ip: Option<String>,
+		last_visitor_id: Option<String>,
+	) -> Result<()> {
+		base::update::<Self, _>(
+			ctx,
+			mm,
+			id,
+			UserForFingerprintUpdate { last_ip, last_visitor_id },
+		)
+		.await
 	}
 
 	/// TODO: For User, deletion will require a soft-delete approach:
