@@ -13,8 +13,20 @@
 //! special-casing needed.
 
 use maxminddb::geoip2;
+use serde::Serialize;
 use std::env;
 use std::sync::OnceLock;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GeoLocation {
+	/// `"Dhaka, Bangladesh"`, or just the country if the city is unknown.
+	pub label: Option<String>,
+	/// City-level coordinates — DB-IP's own resolution (a few km, not
+	/// exact-address), same as any IP-geolocation source. Good enough for
+	/// a map pin on the devices dashboard, not for anything precise.
+	pub lat: Option<f64>,
+	pub lon: Option<f64>,
+}
 
 fn default_db_path() -> String {
 	concat!(env!("CARGO_MANIFEST_DIR"), "/data/dbip-city-lite.mmdb").to_string()
@@ -36,9 +48,9 @@ fn reader() -> &'static Option<maxminddb::Reader<Vec<u8>>> {
 	})
 }
 
-/// `"Dhaka, Bangladesh"`, `"Bangladesh"` (city unknown), or `None` (IP
-/// unparsable, private/loopback, or db unavailable).
-pub fn locate(ip: &str) -> Option<String> {
+/// `None` if the IP is unparsable, private/loopback, or the db is
+/// unavailable — never a partial/fake location.
+pub fn locate(ip: &str) -> Option<GeoLocation> {
 	let reader = reader().as_ref()?;
 	let addr: std::net::IpAddr = ip.parse().ok()?;
 	let city: geoip2::City = reader.lookup(addr).ok()?;
@@ -47,10 +59,15 @@ pub fn locate(ip: &str) -> Option<String> {
 	let country_name =
 		city.country.as_ref().and_then(|c| c.names.as_ref()).and_then(|n| n.get("en")).map(|s| s.to_string());
 
-	match (city_name, country_name) {
+	let label = match (city_name, country_name) {
 		(Some(c), Some(co)) => Some(format!("{c}, {co}")),
 		(Some(c), None) => Some(c),
 		(None, Some(co)) => Some(co),
 		(None, None) => None,
-	}
+	};
+
+	let lat = city.location.as_ref().and_then(|l| l.latitude);
+	let lon = city.location.as_ref().and_then(|l| l.longitude);
+
+	Some(GeoLocation { label, lat, lon })
 }

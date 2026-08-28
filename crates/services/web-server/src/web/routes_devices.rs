@@ -22,6 +22,8 @@ struct DeviceEntry {
 	is_current: bool,
 	ip: Option<String>,
 	location: Option<String>,
+	lat: Option<f64>,
+	lon: Option<f64>,
 	device_label: Option<String>,
 	created_at_ms: i64,
 	expires_at_ms: i64,
@@ -51,10 +53,14 @@ pub async fn api_list_sessions_handler(CtxW(ctx): CtxW) -> Result<Json<Value>> {
 				user_agent: None,
 			});
 
+		let geo = fingerprint.ip.as_deref().and_then(locate);
+
 		devices.push(DeviceEntry {
 			is_current: current_handle == Some(handle.as_str()),
 			session_handle: handle,
-			location: fingerprint.ip.as_deref().and_then(locate),
+			location: geo.as_ref().and_then(|g| g.label.clone()),
+			lat: geo.as_ref().and_then(|g| g.lat),
+			lon: geo.as_ref().and_then(|g| g.lon),
 			ip: fingerprint.ip,
 			device_label: device_label(fingerprint.user_agent.as_deref()),
 			created_at_ms: info.time_created_ms,
