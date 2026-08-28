@@ -17,6 +17,17 @@ serde_json = "1"
 serde_with = { workspace = true }
 # -- Validation
 validator = { version = "0.19", features = ["derive"] }
+# -- Device labels for the active-devices dashboard (display only, never
+# used for auth/risk decisions — see risk-rules/login-risk.json for why
+# UA strings are trusted for that even less). Real ua-parser project data
+# (data/ua-regexes.yaml, from https://github.com/ua-parser/uap-core),
+# not hand-written parsing.
+ua-parser = "0.2"
+serde_yaml = "0.9"
+# -- IP location for the active-devices dashboard (display only). Real
+# DB-IP City Lite data (fetched by scripts/fetch-geoip-db.sh, CC-BY 4.0),
+# not a hand-rolled IP-range table.
+maxminddb = "0.24"
 # -- Web
 axum = { workspace = true }
 tower-http = { workspace = true }

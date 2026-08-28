@@ -14,6 +14,10 @@ _*
 # -- Rust
 target/
 # !Cargo.lock # commented by default
+
+# -- GeoIP db (130MB, fetched by scripts/fetch-geoip-db.sh, not committed)
+crates/libs/lib-web/data/*.mmdb
+crates/libs/lib-web/data/*.mmdb.gz
 !.cargo/
 
 # -- Devai
