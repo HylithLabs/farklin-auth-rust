@@ -123,6 +123,7 @@ pub struct SessionTokens {
 	pub refresh_token: String,
 	pub refresh_token_expiry_ms: i64,
 	pub session_handle: String,
+	pub user_id: String,
 }
 
 #[derive(Deserialize)]
@@ -134,6 +135,8 @@ struct CookieInfoWire {
 #[derive(Deserialize)]
 struct SessionWire {
 	handle: String,
+	#[serde(rename = "userId")]
+	user_id: String,
 }
 
 #[derive(Deserialize)]
@@ -148,12 +151,21 @@ struct CreateSessionWire {
 
 /// `POST /recipe/session` — mints access + refresh tokens for `user_id`.
 /// Call this right after a successful [`sign_up`] or [`sign_in`].
-pub async fn create_session(user_id: &str) -> Result<SessionTokens> {
+///
+/// `user_data_in_database` is stored server-side against the session
+/// (SuperTokens core's own Postgres, not ours) and comes back from
+/// [`get_session_info`] — this is where the active-devices dashboard's
+/// per-session fingerprint (ip, visitorId, user agent) lives. No Farklin
+/// "sessions" table needed; SuperTokens already has one.
+pub async fn create_session(
+	user_id: &str,
+	user_data_in_database: serde_json::Value,
+) -> Result<SessionTokens> {
 	let res = request(reqwest::Method::POST, "/recipe/session", "session")
 		.json(&json!({
 			"userId": user_id,
 			"userDataInJWT": {},
-			"userDataInDatabase": {},
+			"userDataInDatabase": user_data_in_database,
 			"enableAntiCsrf": false,
 			"useDynamicSigningKey": true
 		}))
@@ -174,6 +186,7 @@ pub async fn create_session(user_id: &str) -> Result<SessionTokens> {
 		refresh_token: refresh.token,
 		refresh_token_expiry_ms: refresh.expiry,
 		session_handle: session.handle,
+		user_id: session.user_id,
 	})
 }
 
@@ -199,13 +212,22 @@ struct VerifySessionWire {
 }
 
 /// `POST /recipe/session/verify` — validates an access token.
+///
+/// `checkDatabase: true` — without it, the core trusts the access
+/// token's JWT signature alone and never notices a revoked session until
+/// that (still-valid) token naturally expires, up to an hour later. That
+/// defeats the entire point of "remote log out" (confirmed by hitting
+/// exactly this: revoking a session and then finding its access token
+/// still passed verification). Costs a DB round-trip per request instead
+/// of a pure JWT check — the right tradeoff for "kick this device out
+/// now" actually meaning now.
 pub async fn verify_session(access_token: &str) -> Result<VerifyOutcome> {
 	let res = request(reqwest::Method::POST, "/recipe/session/verify", "session")
 		.json(&json!({
 			"accessToken": access_token,
 			"enableAntiCsrf": false,
 			"doAntiCsrfCheck": false,
-			"checkDatabase": false
+			"checkDatabase": true
 		}))
 		.send()
 		.await?;
@@ -266,6 +288,7 @@ pub async fn refresh_session(refresh_token: &str) -> Result<RefreshOutcome> {
 				refresh_token: refresh.token,
 				refresh_token_expiry_ms: refresh.expiry,
 				session_handle: session.handle,
+				user_id: session.user_id,
 			}))
 		}
 		"UNAUTHORISED" => Ok(RefreshOutcome::Unauthorised),
@@ -281,8 +304,14 @@ struct RemoveSessionWire {
 
 /// `POST /recipe/session/remove` — revokes one session by handle (logout).
 pub async fn revoke_session(session_handle: &str) -> Result<()> {
+	revoke_sessions(&[session_handle.to_string()]).await
+}
+
+/// `POST /recipe/session/remove` — revokes several sessions by handle at
+/// once (e.g. "log out other devices").
+pub async fn revoke_sessions(session_handles: &[String]) -> Result<()> {
 	let res = request(reqwest::Method::POST, "/recipe/session/remove", "session")
-		.json(&json!({ "sessionHandles": [session_handle] }))
+		.json(&json!({ "sessionHandles": session_handles }))
 		.send()
 		.await?;
 
@@ -304,6 +333,83 @@ pub async fn revoke_all_sessions_for_user(user_id: &str) -> Result<()> {
 	let wire: RemoveSessionWire = parse(res).await?;
 	match wire.status.as_str() {
 		"OK" => Ok(()),
+		other => Err(Error::UnexpectedStatus(other.to_string())),
+	}
+}
+
+#[derive(Deserialize)]
+struct UserSessionHandlesWire {
+	status: String,
+	#[serde(rename = "sessionHandles")]
+	session_handles: Vec<String>,
+}
+
+/// `GET /recipe/session/user` — every active session handle for a user,
+/// across all their devices. Powers the active-devices list.
+pub async fn list_session_handles(user_id: &str) -> Result<Vec<String>> {
+	let res = request(reqwest::Method::GET, "/recipe/session/user", "session")
+		.query(&[("userId", user_id)])
+		.send()
+		.await?;
+
+	let wire: UserSessionHandlesWire = parse(res).await?;
+	match wire.status.as_str() {
+		"OK" => Ok(wire.session_handles),
+		other => Err(Error::UnexpectedStatus(other.to_string())),
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionInfo {
+	pub session_handle: String,
+	pub user_id: String,
+	/// Whatever [`create_session`] was given as `user_data_in_database` —
+	/// the ip/visitorId/user-agent fingerprint captured at signin time.
+	pub user_data_in_database: serde_json::Value,
+	pub time_created_ms: i64,
+	pub expiry_ms: i64,
+}
+
+#[derive(Deserialize)]
+struct SessionInfoWire {
+	status: String,
+	#[serde(rename = "sessionHandle")]
+	session_handle: Option<String>,
+	#[serde(rename = "userId")]
+	user_id: Option<String>,
+	#[serde(rename = "userDataInDatabase")]
+	user_data_in_database: Option<serde_json::Value>,
+	#[serde(rename = "timeCreated")]
+	time_created: Option<i64>,
+	expiry: Option<i64>,
+}
+
+/// `GET /recipe/session` — details for one session handle, including the
+/// fingerprint [`create_session`] stored against it. `Ok(None)` if the
+/// session doesn't exist (already revoked, expired, or never existed) —
+/// not an error, callers just skip it from the list.
+pub async fn get_session_info(session_handle: &str) -> Result<Option<SessionInfo>> {
+	let res = request(reqwest::Method::GET, "/recipe/session", "session")
+		.query(&[("sessionHandle", session_handle)])
+		.send()
+		.await?;
+
+	let wire: SessionInfoWire = parse(res).await?;
+	match wire.status.as_str() {
+		"OK" => Ok(Some(SessionInfo {
+			session_handle: wire
+				.session_handle
+				.ok_or(Error::UnexpectedResponse("session info OK with no sessionHandle"))?,
+			user_id: wire
+				.user_id
+				.ok_or(Error::UnexpectedResponse("session info OK with no userId"))?,
+			user_data_in_database: wire.user_data_in_database.unwrap_or(serde_json::Value::Null),
+			time_created_ms: wire
+				.time_created
+				.ok_or(Error::UnexpectedResponse("session info OK with no timeCreated"))?,
+			expiry_ms: wire.expiry.ok_or(Error::UnexpectedResponse("session info OK with no expiry"))?,
+		})),
+		"UNAUTHORISED" => Ok(None),
 		other => Err(Error::UnexpectedStatus(other.to_string())),
 	}
 }

@@ -68,8 +68,8 @@ async fn ctx_resolve(mm: ModelManager, cookies: &Cookies) -> CtxExtResult {
 		.await
 		.map_err(|ex| CtxExtError::CoreCallFailed(ex.to_string()))?;
 
-	let st_user_id = match verify_outcome {
-		VerifyOutcome::Valid { user_id, .. } => user_id,
+	let (st_user_id, session_handle) = match verify_outcome {
+		VerifyOutcome::Valid { user_id, session_handle } => (user_id, session_handle),
 		VerifyOutcome::TryRefresh => return Err(CtxExtError::TryRefreshToken),
 		VerifyOutcome::Unauthorised => return Err(CtxExtError::SessionUnauthorised),
 	};
@@ -82,7 +82,7 @@ async fn ctx_resolve(mm: ModelManager, cookies: &Cookies) -> CtxExtResult {
 			.ok_or(CtxExtError::UserNotFound)?;
 
 	// -- Create CtxExtResult
-	Ctx::new(user.id)
+	Ctx::new_with_session(user.id, st_user_id, session_handle)
 		.map(CtxW)
 		.map_err(|ex| CtxExtError::CtxCreateFail(ex.to_string()))
 }
